@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<todo version="0.1.20">
+    <note priority="medium" time="1675874992">
+        tidy helmholtz pc
+        <note priority="medium" time="1675875023">
+            pass parameters explictly
+        </note>
+        <note priority="medium" time="1675875042">
+            factor into separate file
+        </note>
+        <note priority="medium" time="1675875082">
+            check helmholtz_eta value
+        </note>
+        <note priority="medium" time="1675875089">
+            check forms are correct
+        </note>
+    </note>
+    <note priority="medium" time="1675875128" done="1676311252">
+        minimal swe script
+    </note>
+    <note priority="medium" time="1675875155">
+        script to compare AL solution with standard solution
+        <note priority="medium" time="1675875181">
+            port patch mg solver
+        </note>
+        <note priority="medium" time="1675875209">
+            set up to run timeseries with two solvers simultaneously
+        </note>
+        <note priority="medium" time="1675875255">
+            compare error vs non-AL solution for different gamma and fixed residual tolerance
+        </note>
+    </note>
+    <note priority="medium" time="1675875337">
+        AL as a linear preconditioner (not included at nonlinear level)
+        <note priority="medium" time="1675875523">
+            make PC from PCBase
+        </note>
+        <note priority="medium" time="1675875539">
+            check convergence vs nonlinear version
+        </note>
+        <note priority="medium" time="1675875565">
+            should gamma be the same as in the nonlinear version?
+        </note>
+    </note>
+    <note priority="medium" time="1675875372">
+        linear swe example
+    </note>
+</todo>
