@@ -24,6 +24,8 @@ parser.add_argument('--dt', type=float, default=0.5, help='Timestep in hours.')
 parser.add_argument('--filename', type=str, default='w5aug')
 parser.add_argument('--coords_degree', type=int, default=1, help='Degree of polynomials for sphere mesh approximation.')
 parser.add_argument('--degree', type=int, default=1, help='Degree of finite element space (the DG space).')
+parser.add_argument('--snes_atol', type=float, default=1e0, help='Absolute tolerance for SNES.')
+parser.add_argument('--snes_rtol', type=float, default=1e-8, help='Relative tolerance for SNES.')
 parser.add_argument('--kspschur', type=int, default=40, help='Max number of KSP iterations on the Schur complement.')
 parser.add_argument('--kspmg', type=int, default=3, help='Max number of KSP iterations in the MG levels.')
 parser.add_argument('--patch', type=str, default='star', help='Patch type for MG smoother.')
@@ -117,14 +119,13 @@ aleqn = (
 
 eqn = testeqn + aleqn
 
-
 sparameters = {
     "mat_type":"matfree",
     'snes': {
         'monitor': None,
         'converged_reason': None,
-        'atol': 1e2,
-        'rtol': 1e-16,
+        'atol': args.snes_atol,
+        'rtol': args.snes_rtol,
     },
     "ksp_type": "fgmres",
     'ksp': {
@@ -189,8 +190,10 @@ mg_parameters = {
 
 topleft_MG = {
     'ksp_type': 'fgmres',
-    'ksp_mat_it': 1,
+    'ksp_max_it': 1,
     'pc_type': 'mg',
+    'pc_mg_cycle_type': 'v',
+    'pc_mg_type': 'multiplicative',
     'mg': mg_parameters
 }
 
@@ -200,6 +203,25 @@ elif args.tlblock=="lu":
     sparameters["fieldsplit_0"] = lu_parameters
 else:
     raise ValueError("Unrecognised tlblock argument")
+
+ref_sparams = {
+    "mat_type":"matfree",
+    'snes': {
+        'monitor': None,
+        'converged_reason': None,
+        'atol': args.snes_atol,
+        'rtol': args.snes_rtol,
+    },
+    "ksp_type": "fgmres",
+    'ksp': {
+        'monitor': None,
+        'converged_reason': None,
+    },
+    'pc_type': 'mg',
+    'pc_mg_cycle_type': 'v',
+    'pc_mg_type': 'multiplicative',
+    'mg': mg_parameters
+}
 
 nprob = fd.NonlinearVariationalProblem(eqn, Un1)
 ctx = {"mu": gamma*2/(g*dt)}
@@ -218,6 +240,35 @@ h0 = Un.subfunctions[1]
 u0.assign(un)
 h0.assign(etan + H - b)
 Un1.assign(Un)
+
+Un_ref = fd.Function(W)
+Un1_ref = fd.Function(W)
+
+u0_ref, h0_ref = fd.split(Un_ref)
+u1_ref, h1_ref = fd.split(Un1_ref)
+
+testeqn_ref = (
+    ueq(v, u0_ref, u1_ref, h0_ref, h1_ref)
+    + heq(phi, u0_ref, u1_ref, h0_ref, h1_ref)
+)
+
+
+nprob_ref = fd.NonlinearVariationalProblem(testeqn_ref, Un1_ref)
+nsolver_ref = fd.NonlinearVariationalSolver(nprob_ref,
+                                        solver_parameters=ref_sparams,
+                                        appctx=ctx)
+nsolver_ref.set_transfer_manager(mg.manifold_transfer_manager(W))
+
+un = fd.Function(V1, name="Velocity")
+un.project(case.velocity_expression(*x))
+etan = fd.Function(V2, name="Elevation")
+etan.project(case.elevation_expression(*x))
+
+u0_ref = Un_ref.subfunctions[0]
+h0_ref = Un_ref.subfunctions[1]
+u0_ref.assign(un)
+h0_ref.assign(etan + H - b)
+Un1_ref.assign(Un_ref)
 
 file_sw = fd.File(f'output/{args.filename}.pvd')
 
@@ -240,10 +291,18 @@ save()
 PETSc.Sys.Print(f"gamma*2/(g*dt) = {args.gamma*2/(earth.gravity*dt)}")
 
 for it in range(args.nt):
-    PETSc.Sys.Print(f"\nTimestep: {it} | Hours: {t/units.hour} | CFL: {max_cfl(un, dt)}\n")
+    PETSc.Sys.Print(f"\nTimestep: {it} | Hours: {t/units.hour} | CFL: {max_cfl(un, dt)}")
 
+    PETSc.Sys.Print("\nAugmented Lagrangian solver:")
     nsolver.solve()
     Un.assign(Un1)
+
+    PETSc.Sys.Print("\nMonolithic multigrid solver:")
+    nsolver_ref.solve()
+    Un_ref.assign(Un1_ref)
+
+    PETSc.Sys.Print(f"\nRelative error: {fd.errornorm(Un, Un_ref)/fd.norm(Un)}")
+
     t += dt
     
     if it % args.save_freq == 0:
