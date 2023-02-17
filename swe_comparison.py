@@ -25,7 +25,7 @@ parser.add_argument('--filename', type=str, default='w5aug')
 parser.add_argument('--coords_degree', type=int, default=1, help='Degree of polynomials for sphere mesh approximation.')
 parser.add_argument('--degree', type=int, default=1, help='Degree of finite element space (the DG space).')
 parser.add_argument('--snes_atol', type=float, default=1e0, help='Absolute tolerance for SNES.')
-parser.add_argument('--snes_rtol', type=float, default=1e-8, help='Relative tolerance for SNES.')
+parser.add_argument('--snes_rtol', type=float, default=1e-10, help='Relative tolerance for SNES.')
 parser.add_argument('--kspschur', type=int, default=40, help='Max number of KSP iterations on the Schur complement.')
 parser.add_argument('--kspmg', type=int, default=3, help='Max number of KSP iterations in the MG levels.')
 parser.add_argument('--patch', type=str, default='star', help='Patch type for MG smoother.')
@@ -131,7 +131,6 @@ sparameters = {
     'ksp': {
         'monitor': None,
         'converged_reason': None,
-        "gmres_modifiedgramschmidt": None,
     },
     "pc_type": "fieldsplit",
     "pc_fieldsplit_type": "schur",
@@ -149,7 +148,6 @@ lu_parameters = {
 
 bottomright_mass = {
     "ksp_type": "gmres",
-    "ksp_gmres_modifiedgramschmidt": None,
     "ksp_max_it": args.kspschur,
     "pc_type": "python",
     "pc_python_type": "firedrake.MassInvPC",
@@ -190,7 +188,7 @@ mg_parameters = {
 
 topleft_MG = {
     'ksp_type': 'fgmres',
-    'ksp_max_it': 1,
+    'ksp_max_it': 2,
     'pc_type': 'mg',
     'pc_mg_cycle_type': 'v',
     'pc_mg_type': 'multiplicative',
@@ -290,8 +288,11 @@ save()
 
 PETSc.Sys.Print(f"gamma*2/(g*dt) = {args.gamma*2/(earth.gravity*dt)}")
 
+errors = []
+
 for it in range(args.nt):
-    PETSc.Sys.Print(f"\nTimestep: {it} | Hours: {t/units.hour} | CFL: {max_cfl(un, dt)}")
+    PETSc.Sys.Print(f"\n-------- Timestep {it} --------")
+    PETSc.Sys.Print(f"\nHours: {(t+dt)/units.hour} | CFL: {max_cfl(un, dt)}")
 
     PETSc.Sys.Print("\nAugmented Lagrangian solver:")
     nsolver.solve()
@@ -301,7 +302,9 @@ for it in range(args.nt):
     nsolver_ref.solve()
     Un_ref.assign(Un1_ref)
 
-    PETSc.Sys.Print(f"\nRelative error: {fd.errornorm(Un, Un_ref)/fd.norm(Un)}")
+    err = fd.errornorm(Un, Un_ref)/fd.norm(Un)
+    errors.append(err)
+    PETSc.Sys.Print(f"\nRelative error: {err}")
 
     t += dt
     
@@ -311,3 +314,6 @@ for it in range(args.nt):
     itcount += nsolver.snes.getLinearSolveIterations()
 
 PETSc.Sys.Print("\nIterations", itcount, "its per step", itcount/args.nt)
+
+for it, err in enumerate(errors):
+    PETSc.Sys.Print(f"{it}   {err}")
